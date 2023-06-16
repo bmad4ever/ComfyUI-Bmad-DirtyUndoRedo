@@ -2,6 +2,10 @@
 
 ComfyUI extension that adds undo (and redo) functionality.
 
+Undo/Redo: <kbd>Ctrl</kbd> + <kbd>Z</kbd> / <kbd>Y</kbd>.
+
+Keeping the keys pressed will repeat the undo/redo operation at an ever-increased pace.
+
 ## Instalation:
 
 - Navigate to `/ComfyUI/custom_nodes/` folder;
