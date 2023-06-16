@@ -1,6 +1,4 @@
 import os
-#import subprocess
-#import importlib.util
 import sys
 import filecmp
 import shutil
