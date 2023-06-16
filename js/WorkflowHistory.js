@@ -10,7 +10,7 @@ class WorkflowHistory {
     constructor() {
         // the following paramaters CAN BE TWEAKED
         this.max_undo_steps = 100; // the maximum number of undos that can be performed
-        this.max_redo_steps = 50; // the maximum number of redos that can be performed
+        this.max_redo_steps = 100; // the maximum number of redos that can be performed
         this.state_merge_threshold = 100; // state merge threshold in milliseconds
 
         // DO NOT CHANGE THE VARIABLES BELOW
