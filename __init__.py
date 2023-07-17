@@ -7,6 +7,7 @@ import __main__
 
 python = sys.executable
 
+NODE_CLASS_MAPPINGS = {}
 
 extentions_folder = os.path.join(os.path.dirname(os.path.realpath(__main__.__file__)),
                                  "web" + os.sep + "extensions" + os.sep + "ZZZ-Bmad-DirtyUndoRedo")
