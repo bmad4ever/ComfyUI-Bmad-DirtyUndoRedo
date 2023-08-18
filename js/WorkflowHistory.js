@@ -219,10 +219,7 @@ class WorkflowHistory {
     }
 
     equal_states(a, b) {
-        if (a.length === b.length) {
-            return a.localeCompare(b) === 0;
-        }
-        return false;
+            return a === b;
     }
 
     get_new_candidate_state(app) {
