@@ -81,6 +81,8 @@ class WorkflowHistory {
                 if (event.ctrlKey) {
                     if(app.graph.list_of_graphcanvas[0].getCanvasWindow().document.activeElement.nodeName.toLowerCase() == "textarea")
                         return; // ignore when editing text
+                    if(document.getElementsByClassName("graphdialog").length > 0)
+                        return; // ignore when editing property via dialog
 
                     if (event.key === "z") {
                         workflowHistory.undo(app);
