@@ -79,6 +79,9 @@ class WorkflowHistory {
                 }
                 
                 if (event.ctrlKey) {
+                    if(app.graph.list_of_graphcanvas[0].getCanvasWindow().document.activeElement.nodeName.toLowerCase() == "textarea")
+                        return; // ignore when editing text
+
                     if (event.key === "z") {
                         workflowHistory.undo(app);
                         workflowHistory.prevKey = "z";
