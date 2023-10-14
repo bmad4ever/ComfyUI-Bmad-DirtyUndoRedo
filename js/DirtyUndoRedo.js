@@ -36,12 +36,14 @@ app.registerExtension({
         nodeType.prototype.onNodeCreated = function () {
             const r = onNodeCreated ? onNodeCreated.apply(this, arguments) : undefined;
 
+            const orig_onMouseDown = this.onMouseDown;
             this.onMouseDown = function (event) {
                 //console.log("onMouseDown");
 
                 // set fixed node order so that state comparison works properly and avoids repeating the same state
                 // (is this really required tho? why not use _nodes_in_order when serializing? )
                 for (let i = 0; i < app.graph._nodes.length; i++) app.graph._nodes[i] = app.graph._nodes_in_order[i];
+                if (orig_onMouseDown) return orig_onMouseDown.apply(this, arguments);
                 return false;
             };
 
