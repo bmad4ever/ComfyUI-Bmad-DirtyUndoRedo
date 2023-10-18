@@ -1,5 +1,12 @@
 class WorkflowHistory {
 
+    /**
+     * @description
+     * SYSTEM_TYPE determines the type of operating system the user is currently on. If the user is on a Mac or related products (like iMac, MacBook), it's set to 'mac'; otherwise, it defaults to 'default'.
+     * This static property is assigned only once throughout its lifecycle. Subsequent checks for the system type won't need repeated evaluations.
+     */
+    static SYSTEM_TYPE = (/Mac|iMac|MacBook/i.test(navigator.platform)) ? 'mac' : 'default';
+
     // STORES ENTIRE GRAPH STATE *NOT THE CHANGES !!!
 
 
@@ -70,6 +77,53 @@ class WorkflowHistory {
 
             //app.graph.onConnectionChange // not needed apparently
 
+            /**
+             * @description
+             * Normalizes the given key combination string.
+             * @param {string} keyCombination - The key combination string to be normalized.
+             * @returns {string} - The normalized key combination string.
+             */
+            function normalizeKeyCombination(keyCombination) {
+                const order = ['ctrl', 'meta', 'shift', 'alt', 'option'];
+                const keys = keyCombination.split('+').sort((a, b) => {
+                    return order.indexOf(a) - order.indexOf(b);
+                });
+                return keys.join('+');
+            }
+
+            // Normalize key combinations in keyMappings
+            const normalizeMappings = (mappings) => {
+                const normalizedMappings = {};
+                for (let key in mappings) {
+                    const normalizedKey = normalizeKeyCombination(key);
+                    normalizedMappings[normalizedKey] = mappings[key];
+                }
+                return normalizedMappings;
+            };
+
+            /**
+            * @description
+            * keyMappings defines the mapping relationships between keyboard shortcuts and operations for different operating systems.
+            */
+            const keyMappings = {
+                default: normalizeMappings({
+                    'ctrl+z': () => this.undo(app),
+                    'ctrl+y': () => this.redo(app),
+                    'ctrl+shift+z': () => this.redo(app),
+                    // ... other mappings ...
+                }),
+                mac: normalizeMappings({
+                    'meta+z': () => this.undo(app),
+                    'meta+shift+z': () => this.redo(app),
+                    'ctrl+z': () => this.undo(app),
+                    'ctrl+shift+z': () => this.redo(app),
+                    'ctrl+y': () => this.redo(app),
+                    // ... other mappings ...
+                })
+            };
+    
+            const currentKeyMappings = keyMappings[WorkflowHistory.SYSTEM_TYPE];
+
             this.repKeyCount = 0;
             window.addEventListener("keydown", function (event) {
                 if(workflowHistory.prevKey === event.key) return; //avoid quick auto spamm
@@ -78,35 +132,35 @@ class WorkflowHistory {
                     workflowHistory.repKeyCount=0;
                 }
                 
-                if (event.ctrlKey) {
-                    if(app.graph.list_of_graphcanvas[0].getCanvasWindow().document.activeElement.nodeName.toLowerCase() == "textarea")
-                        return; // ignore when editing text
-                    if(document.getElementsByClassName("graphdialog").length > 0)
-                        return; // ignore when editing property via dialog
+                /**
+                 * @description
+                 * keyCombination records the key combination pressed by the user, so we can detect and match the corresponding operation.
+                 */
+                const keyCombination = [
+                    event.ctrlKey && 'ctrl',
+                    event.metaKey && 'meta',
+                    event.shiftKey && 'shift',
+                    event.altKey && (WorkflowHistory.SYSTEM_TYPE == 'mac' ? 'option' : 'alt'),
+                    event.key.toLowerCase()
+                ].filter(Boolean).join('+');
 
-                    if (event.key === "z") {
-                        workflowHistory.undo(app);
-                        workflowHistory.prevKey = "z";
-                        workflowHistory.keyTimeout = setTimeout(
-                            ()=>{workflowHistory.prevKey=null}, 
-                            workflowHistory.time_to_next_operation_repeat() 
-                            );
-                        workflowHistory.repKeyCount += 1;
-                    }
-                    if (event.key === "y") {
-                        workflowHistory.redo(app);
-                        workflowHistory.prevKey = "y";
-                        workflowHistory.keyTimeout = setTimeout(
-                            ()=>{workflowHistory.prevKey=null}, 
-                            workflowHistory.time_to_next_operation_repeat() 
-                            );
-                        workflowHistory.repKeyCount += 1;
-                    }
+                // Normalize the captured key combination before comparison
+                const normalizedKeyCombination = normalizeKeyCombination(keyCombination);
+            
+                const operation = currentKeyMappings[normalizedKeyCombination];
+                if (operation) {
+                    operation();
+                    workflowHistory.prevKey = event.key.toLowerCase();
+                    workflowHistory.keyTimeout = setTimeout(
+                        ()=>{workflowHistory.prevKey=null},
+                        workflowHistory.time_to_next_operation_repeat()
+                    );
+                    workflowHistory.repKeyCount += 1;
                 }
-            },);
-
+            });
+            
             window.addEventListener("keyup", function (event) {
-                if (event.key === workflowHistory.prevKey){
+                if (event.key.toLowerCase() === workflowHistory.prevKey){
                     clearTimeout(workflowHistory.keyTimeout);
                     workflowHistory.prevKey=null;
                     workflowHistory.repKeyCount=0;
