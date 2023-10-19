@@ -85,7 +85,7 @@ class WorkflowHistory {
              */
             function normalizeKeyCombination(keyCombination) {
                 const order = ['ctrl', 'meta', 'shift', 'alt', 'option'];
-                const keys = keyCombination.split('+').sort((a, b) => {
+                const keys = keyCombination.toLowerCase().split('+').sort((a, b) => {
                     return order.indexOf(a) - order.indexOf(b);
                 });
                 return keys.join('+');
@@ -126,7 +126,7 @@ class WorkflowHistory {
 
             this.repKeyCount = 0;
             window.addEventListener("keydown", function (event) {
-                if(workflowHistory.prevKey === event.key) return; //avoid quick auto spamm
+                if(workflowHistory.prevKey === event.key.toLowerCase()) return; //avoid quick auto spamm
                 else if(workflowHistory.prevKey !== null) {
                     clearTimeout(workflowHistory.keyTimeout);
                     workflowHistory.repKeyCount=0;
