@@ -160,7 +160,8 @@ class WorkflowHistory {
             });
             
             window.addEventListener("keyup", function (event) {
-                if (event.key.toLowerCase() === workflowHistory.prevKey){
+                if (event.key.toLowerCase() === workflowHistory.prevKey ||
+					workflowHistory.prevKey === null){
                     clearTimeout(workflowHistory.keyTimeout);
                     workflowHistory.prevKey=null;
                     workflowHistory.repKeyCount=0;
