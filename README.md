@@ -2,7 +2,9 @@
 
 ComfyUI extension that adds undo (and redo) functionality.
 
-Undo/Redo: <kbd>Ctrl</kbd> + <kbd>Z</kbd> / <kbd>Y</kbd>.
+Undo: <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Z</kbd> 
+
+Redo: <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Y</kbd> ; or <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Shift</kbd> + Z 
 
 Keeping the keys pressed will repeat the undo/redo operation at an ever-increased pace.
 
