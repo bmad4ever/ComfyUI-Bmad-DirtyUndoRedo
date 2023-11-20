@@ -36,6 +36,7 @@ class WorkflowHistory {
         this.b_count = 0;
 
         this.enabled = true;
+        this.check_mouse_up = true;
 
 
         this.setup = function (app) {
@@ -48,8 +49,13 @@ class WorkflowHistory {
                 const r = o_onMouse ? o_onMouse.apply(this, arguments) : undefined;
 
                 if (!workflowHistory.enabled) return r;
-                //console.log("onMouse");
+                if (window['graph-canvas'].style.cursor === "") return r;
+
+                workflowHistory.after(); // not ideal to have back to back checks, but should fix some edge cases...
                 workflowHistory.before();
+
+                // only check for potential new state on mouseup if the user clicked on something
+                workflowHistory.check_mouse_up = true
 
                 return r;
             }
@@ -59,7 +65,8 @@ class WorkflowHistory {
                 const r = o__mouseup_callback ? o__mouseup_callback.apply(this, arguments) : undefined;
 
                 if (!workflowHistory.enabled) return r;
-                //console.log("_mouseup_callback");
+                if (!workflowHistory.check_mouse_up) return r;
+                workflowHistory.check_mouse_up = false;
 
                 const leftClick = 1;
                 const rightClick = 3;
