@@ -256,8 +256,6 @@ class WorkflowHistory {
     undo_redo(app, redo) {
         if (!this.enabled) return;
 
-        this.disable_load_reset = true;
-
         let timeline = redo ? this.redo_history : this.undo_history;
         let opposite_timeline = redo ? this.undo_history : this.redo_history;
         let operation_name = redo ? "redo" : "undo";
@@ -267,6 +265,8 @@ class WorkflowHistory {
             console.log("Can't " + operation_name) //maybe alert instead?
             return;
         }
+
+        this.disable_load_reset = true;
 
         const prev_state = timeline.shift();
         const current_state = JSON.stringify(app.graph.serialize(), null);
