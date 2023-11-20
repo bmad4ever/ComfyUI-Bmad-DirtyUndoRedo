@@ -132,6 +132,11 @@ class WorkflowHistory {
                     workflowHistory.repKeyCount=0;
                 }
                 
+                if (app.graph.list_of_graphcanvas[0].getCanvasWindow().document.activeElement.nodeName.toLowerCase() == "textarea")
+                    return; // ignore when editing text
+                if (document.getElementsByClassName("graphdialog").length > 0)
+                    return; // ignore when editing property via dialog
+
                 /**
                  * @description
                  * keyCombination records the key combination pressed by the user, so we can detect and match the corresponding operation.
