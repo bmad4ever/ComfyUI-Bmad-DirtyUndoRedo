@@ -186,7 +186,7 @@ class WorkflowHistory {
             }
 
             const o_onAfterChange = app.graph.onAfterChange;
-            app.graph.afterChange = function (info) {
+            app.graph.onAfterChange = function (info) {
                 o_onAfterChange ? o_onAfterChange.apply(this, arguments) : undefined;
 
                 this.b_count -= 1;
