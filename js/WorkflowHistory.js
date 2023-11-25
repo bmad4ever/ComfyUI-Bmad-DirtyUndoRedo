@@ -38,6 +38,8 @@ class WorkflowHistory {
         this.enabled = true;
         this.check_mouse_up = true;
 
+        this.igraph = new LGraph() // auxiliary variable; used only by get_serialized_graph
+
 
         this.setup = function (app) {
             if (this.setup_done) return;
@@ -188,7 +190,6 @@ class WorkflowHistory {
                 if (!workflowHistory.enabled) return;
                 if(this.b_count<2) return;//avoid unnecessary spam
 
-                //console.log("beforeChange");
                 workflowHistory.before();
             }
 
@@ -200,7 +201,6 @@ class WorkflowHistory {
                 if (!workflowHistory.enabled) return;
                 if(this.b_count>0) return; //same reasoning as in beforeChange
 
-                //console.log("afterChange");
                 workflowHistory.after();
             }
         }
@@ -208,7 +208,6 @@ class WorkflowHistory {
 
     before() {
         if (!this.enabled) return;
-        //console.log("before");
 
         const timestamp = Date.now();
         if (timestamp - this.prev_undo_timestamp < this.state_merge_threshold) {
@@ -223,13 +222,10 @@ class WorkflowHistory {
 
     after() {
         if (!this.enabled) return;
-        //console.log("after");
 
         {
             // was there any change? if not, don't try to store the state
-            // (this check is not guaranteed to work due to node order, but I am reordering nodes onSelected;
-            //  so unless there are other operations that reorder nodes, it should be fine... I think)
-            const equal = this.equal_states(JSON.stringify(app.graph.serialize(), null), this.temp_state);
+            const equal = this.equal_states(this.get_serialized_graph(app.graph), this.temp_state);
             if (equal) return;
         }
 
@@ -247,7 +243,6 @@ class WorkflowHistory {
             return; //the new state is equal to prev stored state.
         }
 
-        //console.log("added state to undo history")
         this.undo_history.unshift(potential_new_state);
         this.prev_undo_timestamp = timestamp;
 
@@ -276,7 +271,7 @@ class WorkflowHistory {
         this.disable_load_reset = true;
 
         const prev_state = timeline.shift();
-        const current_state = JSON.stringify(app.graph.serialize(), null);
+        const current_state = this.get_serialized_graph(app.graph)
 
         opposite_timeline.unshift(current_state);
         if (opposite_timeline.length > max_opposite_timeline_size)
@@ -294,9 +289,23 @@ class WorkflowHistory {
             return a === b;
     }
 
+    /**
+    * @description
+    * Returns a string of a serialized graph with the same links and nodes as the source LGraph, but no additional copied data.
+    * 
+    * The igraph is used for serialization.
+    */
+    get_serialized_graph(source){
+        this.igraph._nodes = Object.values(source._nodes_by_id);
+        this.igraph.links = source.links;
+        // TODO: is there anything else that should be stored?
+        // TODO: if applicable, consider removing unneeded data in serialized object; then reintroduced it when loading
+        return JSON.stringify(this.igraph.serialize(), null);
+    }
+
     get_new_candidate_state(app) {
         this.temp_timestamp = Date.now();
-        this.temp_state = JSON.stringify(app.graph.serialize(), null);
+        this.temp_state = this.get_serialized_graph(app.graph)
     }
 
     clean_history() {
