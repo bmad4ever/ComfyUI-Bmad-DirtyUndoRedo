@@ -296,8 +296,11 @@ class WorkflowHistory {
     * The igraph is used for serialization.
     */
     get_serialized_graph(source){
+        this.igraph._nodes_by_id = this.igraph._nodes_in_order = null;
         this.igraph._nodes = Object.values(source._nodes_by_id);
         this.igraph.links = source.links;
+        this.igraph.last_link_id = source.last_link_id;
+        this.igraph.last_node_id = source.last_node_id;
         // TODO: is there anything else that should be stored?
         // TODO: if applicable, consider removing unneeded data in serialized object; then reintroduced it when loading
         return JSON.stringify(this.igraph.serialize(), null);
