@@ -301,6 +301,7 @@ class WorkflowHistory {
         this.igraph.links = source.links;
         this.igraph.last_link_id = source.last_link_id;
         this.igraph.last_node_id = source.last_node_id;
+	this.igraph._groups = source._groups;
         // TODO: is there anything else that should be stored?
         // TODO: if applicable, consider removing unneeded data in serialized object; then reintroduced it when loading
         return JSON.stringify(this.igraph.serialize(), null);
