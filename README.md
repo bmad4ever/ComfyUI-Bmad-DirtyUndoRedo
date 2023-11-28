@@ -10,7 +10,7 @@ After updating your local ComfyUI you will have to remove or disable the extensi
 **Alternatively, if you wish to keep using the extension you will have to remove the undoRedo.js from the web\extensions\core directory.**
 
 As of time of writing (Nov 28, 2023), I noticed the following differences:
-1. this extension allows to undo/redo after cloning, which appears to not be yet supported in the default implementation; 
+1. this extension allows to undo/redo after cloning, which appears to not be yet fully functional in the default implementation; 
 2. some actions not captured by this extension are captured in the default implementation;
 3. this extension will clean the undo/redo history when loading a new workflow (this grants no advantage whatsoever in workflow recoverability, is just a personal preference)
 
