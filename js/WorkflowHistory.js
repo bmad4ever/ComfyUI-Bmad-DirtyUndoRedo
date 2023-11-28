@@ -27,19 +27,13 @@ export class WorkflowHistory {
         app.canvas.processMouseDown = function (e) {
             const r = app.canvas.og_comfy_processMouseDown.apply(this, arguments);
 
-            if (!app.workflowHistory.enabled) return r;
+            if (!workflowHistory.enabled) return r;
+            if (workflowHistory.b_count > 0) return r; // ignore node clicks since OnBeforeChange was already triggered
             if (this.dragging_canvas && !this.selected_group_resizing && !this.selected_group_moving)
                 return r;
 
-            // TODO LIST:
-            // 1 > before makes no sence here because there is a discrete interaction, just get new candidate state
-            // 2 > window.onmousedown can detect when clicking a textbox. probably useful
-            // 3 > comparison in after appers to be redundant, it will likely be removed
-            // 4 > implement lenght check only here, if 2 are done with the same states, the first will cancel quickly.
-            // 5 >  was there anything else??? can't remember... 
-            //app.workflowHistory.after(); // not ideal to have back to back checks, but should fix some edge cases...
-            //app.workflowHistory.before();
-            workflowHistory.get_new_candidate_state(app);
+            // Note: clicking on a node triggers onBefore before the processMouseDown; and clicking on a Group only triggers processMouseDown
+            workflowHistory.before(true);
 
             // only check for potential new state on mouseup if the user clicked on something
             workflowHistory.check_mouse_up = true
@@ -49,30 +43,28 @@ export class WorkflowHistory {
         app.canvas._mousedown_callback = app.canvas.processMouseDown.bind(app.canvas);
         LiteGraph.pointerListenerAdd(app.canvasEl, "down", app.canvas._mousedown_callback, true);
 
-        // fix some text stuff (not 100%, check list above and think about it)
-        window.onmousedown = function(e){
-            workflowHistory.after();
-            workflowHistory.get_new_candidate_state(app);
+        window.onmousedown = function (e) {
+            workflowHistory.before(true);
         }
-        
+
 
         const o__mouseup_callback = app.canvas._mouseup_callback;
         app.canvas._mouseup_callback = function (event) {
             const r = o__mouseup_callback ? o__mouseup_callback.apply(this, arguments) : undefined;
 
-            if (!app.workflowHistory.enabled) return r;
-            if (!app.workflowHistory.check_mouse_up) return r;
-            app.workflowHistory.check_mouse_up = false;
+            if (!workflowHistory.enabled) return r;
+            if (!workflowHistory.check_mouse_up) return r;
+            workflowHistory.check_mouse_up = false;
 
             const leftClick = 1;
             const rightClick = 3;
 
             if (event.which === leftClick) {
-                app.workflowHistory.after();
+                workflowHistory.after();
             }
 
             if (event.which === rightClick) {
-                app.workflowHistory.before(); // ??
+                workflowHistory.before(); // ??
             }
 
             return r;
@@ -179,9 +171,9 @@ export class WorkflowHistory {
         app.graph.onBeforeChange = function (info) {
             o_onBeforeChange ? o_onBeforeChange.apply(this, arguments) : undefined;
 
-            this.b_count += 1;
+            workflowHistory.b_count += 1;
             if (!workflowHistory.enabled) return;
-            if (this.b_count < 2) return;//avoid unnecessary spam
+            if (workflowHistory.b_count > 2) return; //avoid unnecessary spam
 
             workflowHistory.before();
         }
@@ -190,9 +182,9 @@ export class WorkflowHistory {
         app.graph.onAfterChange = function (info) {
             o_onAfterChange ? o_onAfterChange.apply(this, arguments) : undefined;
 
-            this.b_count -= 1;
+            workflowHistory.b_count -= 1;
             if (!workflowHistory.enabled) return;
-            if (this.b_count > 0) return; //same reasoning as in beforeChange
+            if (workflowHistory.b_count > 0) return; //same reasoning as in beforeChange
 
             workflowHistory.after();
         }
@@ -218,55 +210,72 @@ export class WorkflowHistory {
 
         this.disable_load_reset = false; //distinguish when a load is triggered by an undo/redo command, or by loading a new workflow
         this.between_onbefore_onafter = false; //ignores conection changes when true
-        this.b_count = 0;
+        this.b_count = 0; // sums OnBeforeChange calls and subtracts OnAfterChange calls
 
         this.enabled = true;
-        this.check_mouse_up = true;
+        this.check_mouse_up = false;
 
         this.igraph = new LGraph() // auxiliary variable; used only by get_serialized_graph
     }
 
-    before() {
+
+    /**
+     * Updates the value of candidate state if enough time has passed since previous stored state.
+     * @param {boolean} force  enforce a new candidate; use when sure there was a discrete interaction.
+     */
+    before(force = false) {
         if (!this.enabled) return;
 
         const timestamp = Date.now();
-        if (timestamp - this.prev_undo_timestamp < this.state_merge_threshold) {
-            this.prev_undo_timestamp = timestamp;
-            //console.log("merged") // will be kept the same
-            return; //state is whithin the merge thesh and is discarded, don't do anything else
-        }
+
+        if (!force) // a discrete interaction, ignore stamping and get new candidate
+            if (
+                (timestamp - this.prev_undo_timestamp < this.state_merge_threshold) || // a quick change, prob not done via discrite interaction
+                (this.b_count >= 2) // onBeforeChange spam has been going on (and timestamp may not have been updated)
+            ) {
+                this.prev_undo_timestamp = timestamp;
+                //console.log("merged") // will be kept the same
+                return; //state is whithin the merge thesh and is discarded, don't do anything else
+            }
 
         // potential state outside merge thresh. note that it is not guaranteed to be pushed        
-        this.get_new_candidate_state(app);
+        //this.get_new_candidate_state(app);
+        const p_candidate_state = { state: workflowHistory.temp_state, timestamp: workflowHistory.temp_timestamp }
+        workflowHistory.get_new_candidate_state(app);
+        if (!workflowHistory.equal_states(p_candidate_state.state, workflowHistory.temp_state, true))
+            workflowHistory.tryAddToUndoHistory(p_candidate_state);
     }
 
     after() {
         if (!this.enabled) return;
 
         // TODO remove this later, most likely it is not needed (see TODO list in processMouseDown)
-        {
-            // was there any change? if not, don't try to store the state
-            const equal = this.equal_states(this.get_serialized_graph(app.graph), this.temp_state);
-            if (equal) return;
-        }
+        /* {
+             // was there any change? if not, don't try to store the state
+             const equal = this.equal_states(this.get_serialized_graph(app.graph), this.temp_state);
+             if (equal) return;
+         }*/
 
         this.tryAddToUndoHistory();
     }
 
-    // TODO allow to receive new candidate instead of using this.temp_state; use the format {state, timestamp}; add jsdoc
-    tryAddToUndoHistory() {
+
+    /**
+     * Will add potential_state to undo history if not equal to previously stored state.
+     * 
+     * If the state is successfully stored the redo history is cleaned.
+     * @param {*} potential_state the state to try to add undo history in the format {state: ..., timestamp: ...}
+     */
+    tryAddToUndoHistory(potential_state = { state: this.temp_state, timestamp: this.timestamp }) {
         if (!this.enabled) return;
 
-        const potential_new_state = this.temp_state;
-        const timestamp = this.temp_timestamp;
-
-        if (this.undo_history.length > 0 && this.equal_states(potential_new_state, this.undo_history[0])) {
+        if (this.undo_history.length > 0 && this.equal_states(potential_state.state, this.undo_history[0])) {
             //console.log("discarded potential undo state")
             return; //the new state is equal to prev stored state.
         }
 
-        this.undo_history.unshift(potential_new_state);
-        this.prev_undo_timestamp = timestamp;
+        this.undo_history.unshift(potential_state.state);
+        this.prev_undo_timestamp = potential_state.timestamp;
 
         if (this.undo_history.length > this.max_undo_steps)
             this.undo_history.pop();
@@ -277,6 +286,12 @@ export class WorkflowHistory {
     undo(app) { this.undo_redo(app, false); }
     redo(app) { this.undo_redo(app, true); }
 
+
+    /**
+     * @param {ComfyApp} app 
+     * @param {boolean} redo set to true to execute a redo; or false for a undo. 
+     * @returns 
+     */
     undo_redo(app, redo) {
         if (!this.enabled) return;
 
@@ -300,17 +315,22 @@ export class WorkflowHistory {
             opposite_timeline.pop();
 
         app.loadGraphData(JSON.parse(prev_state));
-        app.graph.setDirtyCanvas(true);
-
         this.get_new_candidate_state(app);
-
         this.disable_load_reset = false;
     }
 
-    // TODO add arg for light check and add jsdoc
-    equal_states(a, b) {
-        return a === b;
+
+    /**
+     * 
+     * @param {*} a json serialized LGraph
+     * @param {*} b json serialized LGraph
+     * @param {boolean} quick_n_dirty if set to true, will ONLY compare the graphs' lengths. 
+     * @returns 
+     */
+    equal_states(a, b, quick_n_dirty = false) {
+        return quick_n_dirty ? (a.length === b.length) : (a === b);
     }
+
 
     /**
     * @description
@@ -343,6 +363,10 @@ export class WorkflowHistory {
         this.redo_history = [];
     }
 
+    /**
+     * Computes the delay between each undo/redo operation when the key is held down.
+     * @returns delay in milliseconds
+     */
     time_to_next_operation_repeat() {
         const max_delay = 500;
         const min_delay = 30;
