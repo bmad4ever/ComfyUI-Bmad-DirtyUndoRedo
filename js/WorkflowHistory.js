@@ -1,4 +1,4 @@
-class WorkflowHistory {
+export class WorkflowHistory {
 
     /**
      * @description
@@ -13,6 +13,191 @@ class WorkflowHistory {
     lock() { this.enabled = false; }
     release() { this.enabled = true; }
     isBetweenOnBeforeAndOnAfter() { return this.b_count > 0; }
+
+
+    /**
+     * Set mouse, keys and graph events' callbacks.
+     * @param {ComfyApp} app 
+     */
+    _setup(app) {
+        // overrides on top of comfy to be able to access selected_group_moving immidiatly after being updated; 
+        //   this is not accessible in OnMouseDown, which is the last method called by the original processMouseDown
+        app.canvas.og_comfy_processMouseDown = app.canvas.processMouseDown;
+        LiteGraph.pointerListenerRemove(app.canvasEl, "down", app.canvas._mousedown_callback, true);
+        app.canvas.processMouseDown = function (e) {
+            const r = app.canvas.og_comfy_processMouseDown.apply(this, arguments);
+
+            if (!app.workflowHistory.enabled) return r;
+            if (this.dragging_canvas && !this.selected_group_resizing && !this.selected_group_moving)
+                return r;
+
+            // TODO LIST:
+            // 1 > before makes no sence here because there is a discrete interaction, just get new candidate state
+            // 2 > window.onmousedown can detect when clicking a textbox. probably useful
+            // 3 > comparison in after appers to be redundant, it will likely be removed
+            // 4 > implement lenght check only here, if 2 are done with the same states, the first will cancel quickly.
+            // 5 >  was there anything else??? can't remember... 
+            //app.workflowHistory.after(); // not ideal to have back to back checks, but should fix some edge cases...
+            //app.workflowHistory.before();
+            workflowHistory.get_new_candidate_state(app);
+
+            // only check for potential new state on mouseup if the user clicked on something
+            workflowHistory.check_mouse_up = true
+
+            return r;
+        };
+        app.canvas._mousedown_callback = app.canvas.processMouseDown.bind(app.canvas);
+        LiteGraph.pointerListenerAdd(app.canvasEl, "down", app.canvas._mousedown_callback, true);
+
+        // fix some text stuff (not 100%, check list above and think about it)
+        window.onmousedown = function(e){
+            workflowHistory.after();
+            workflowHistory.get_new_candidate_state(app);
+        }
+        
+
+        const o__mouseup_callback = app.canvas._mouseup_callback;
+        app.canvas._mouseup_callback = function (event) {
+            const r = o__mouseup_callback ? o__mouseup_callback.apply(this, arguments) : undefined;
+
+            if (!app.workflowHistory.enabled) return r;
+            if (!app.workflowHistory.check_mouse_up) return r;
+            app.workflowHistory.check_mouse_up = false;
+
+            const leftClick = 1;
+            const rightClick = 3;
+
+            if (event.which === leftClick) {
+                app.workflowHistory.after();
+            }
+
+            if (event.which === rightClick) {
+                app.workflowHistory.before(); // ??
+            }
+
+            return r;
+        };
+
+
+        /**
+        * @description
+        * Normalizes the given key combination string.
+        * @param {string} keyCombination - The key combination string to be normalized.
+        * @returns {string} - The normalized key combination string.
+        */
+        function normalizeKeyCombination(keyCombination) {
+            const order = ['ctrl', 'meta', 'shift', 'alt', 'option'];
+            const keys = keyCombination.toLowerCase().split('+').sort((a, b) => {
+                return order.indexOf(a) - order.indexOf(b);
+            });
+            return keys.join('+');
+        }
+
+        // Normalize key combinations in keyMappings
+        const normalizeMappings = (mappings) => {
+            const normalizedMappings = {};
+            for (let key in mappings) {
+                const normalizedKey = normalizeKeyCombination(key);
+                normalizedMappings[normalizedKey] = mappings[key];
+            }
+            return normalizedMappings;
+        };
+
+        /**
+        * @description
+        * keyMappings defines the mapping relationships between keyboard shortcuts and operations for different operating systems.
+        */
+        const keyMappings = {
+            default: normalizeMappings({
+                'ctrl+z': () => this.undo(app),
+                'ctrl+y': () => this.redo(app),
+                'ctrl+shift+z': () => this.redo(app),
+                // ... other mappings ...
+            }),
+            mac: normalizeMappings({
+                'meta+z': () => this.undo(app),
+                'meta+shift+z': () => this.redo(app),
+                'ctrl+z': () => this.undo(app),
+                'ctrl+shift+z': () => this.redo(app),
+                'ctrl+y': () => this.redo(app),
+                // ... other mappings ...
+            })
+        };
+
+        const currentKeyMappings = keyMappings[WorkflowHistory.SYSTEM_TYPE];
+
+        this.repKeyCount = 0;
+        window.addEventListener("keydown", function (event) {
+            if (workflowHistory.prevKey === event.key.toLowerCase()) return; //avoid quick auto spamm
+            else if (workflowHistory.prevKey !== null) {
+                clearTimeout(workflowHistory.keyTimeout);
+                workflowHistory.repKeyCount = 0;
+            }
+
+            if (app.graph.list_of_graphcanvas[0].getCanvasWindow().document.activeElement.nodeName.toLowerCase() == "textarea")
+                return; // ignore when editing text
+            if (document.getElementsByClassName("graphdialog").length > 0)
+                return; // ignore when editing property via dialog
+
+            /**
+             * @description
+             * keyCombination records the key combination pressed by the user, so we can detect and match the corresponding operation.
+             */
+            const keyCombination = [
+                event.ctrlKey && 'ctrl',
+                event.metaKey && 'meta',
+                event.shiftKey && 'shift',
+                event.altKey && (WorkflowHistory.SYSTEM_TYPE == 'mac' ? 'option' : 'alt'),
+                event.key.toLowerCase()
+            ].filter(Boolean).join('+');
+
+            // Normalize the captured key combination before comparison
+            const normalizedKeyCombination = normalizeKeyCombination(keyCombination);
+
+            const operation = currentKeyMappings[normalizedKeyCombination];
+            if (operation) {
+                operation();
+                workflowHistory.prevKey = event.key.toLowerCase();
+                workflowHistory.keyTimeout = setTimeout(
+                    () => { workflowHistory.prevKey = null },
+                    workflowHistory.time_to_next_operation_repeat()
+                );
+                workflowHistory.repKeyCount += 1;
+            }
+        });
+
+        window.addEventListener("keyup", function (event) {
+            if (event.key.toLowerCase() === workflowHistory.prevKey ||
+                workflowHistory.prevKey === null) {
+                clearTimeout(workflowHistory.keyTimeout);
+                workflowHistory.prevKey = null;
+                workflowHistory.repKeyCount = 0;
+            }
+        });
+
+        const o_onBeforeChange = app.graph.onBeforeChange;
+        app.graph.onBeforeChange = function (info) {
+            o_onBeforeChange ? o_onBeforeChange.apply(this, arguments) : undefined;
+
+            this.b_count += 1;
+            if (!workflowHistory.enabled) return;
+            if (this.b_count < 2) return;//avoid unnecessary spam
+
+            workflowHistory.before();
+        }
+
+        const o_onAfterChange = app.graph.onAfterChange;
+        app.graph.onAfterChange = function (info) {
+            o_onAfterChange ? o_onAfterChange.apply(this, arguments) : undefined;
+
+            this.b_count -= 1;
+            if (!workflowHistory.enabled) return;
+            if (this.b_count > 0) return; //same reasoning as in beforeChange
+
+            workflowHistory.after();
+        }
+    }
+
 
     constructor() {
         // the following paramaters CAN BE TWEAKED
@@ -39,171 +224,6 @@ class WorkflowHistory {
         this.check_mouse_up = true;
 
         this.igraph = new LGraph() // auxiliary variable; used only by get_serialized_graph
-
-
-        this.setup = function (app) {
-            if (this.setup_done) return;
-            this.setup_done = true;
-            app.wh = this;
-
-            const o_onMouse = app.canvas.onMouse;
-            app.canvas.onMouse = function () {
-                const r = o_onMouse ? o_onMouse.apply(this, arguments) : undefined;
-
-                if (!workflowHistory.enabled) return r;
-                if (window['graph-canvas'].style.cursor === "") return r;
-
-                workflowHistory.after(); // not ideal to have back to back checks, but should fix some edge cases...
-                workflowHistory.before();
-
-                // only check for potential new state on mouseup if the user clicked on something
-                workflowHistory.check_mouse_up = true
-
-                return r;
-            }
-
-            const o__mouseup_callback = app.canvas._mouseup_callback;
-            app.canvas._mouseup_callback = function (event) {
-                const r = o__mouseup_callback ? o__mouseup_callback.apply(this, arguments) : undefined;
-
-                if (!workflowHistory.enabled) return r;
-                if (!workflowHistory.check_mouse_up) return r;
-                workflowHistory.check_mouse_up = false;
-
-                const leftClick = 1;
-                const rightClick = 3;
-
-                if (event.which === leftClick) {
-                    workflowHistory.after();
-                }
-
-                if (event.which === rightClick) {
-                    workflowHistory.before(); // ??
-                }
-
-                return r;
-            };
-
-            //app.graph.onConnectionChange // not needed apparently
-
-            /**
-             * @description
-             * Normalizes the given key combination string.
-             * @param {string} keyCombination - The key combination string to be normalized.
-             * @returns {string} - The normalized key combination string.
-             */
-            function normalizeKeyCombination(keyCombination) {
-                const order = ['ctrl', 'meta', 'shift', 'alt', 'option'];
-                const keys = keyCombination.toLowerCase().split('+').sort((a, b) => {
-                    return order.indexOf(a) - order.indexOf(b);
-                });
-                return keys.join('+');
-            }
-
-            // Normalize key combinations in keyMappings
-            const normalizeMappings = (mappings) => {
-                const normalizedMappings = {};
-                for (let key in mappings) {
-                    const normalizedKey = normalizeKeyCombination(key);
-                    normalizedMappings[normalizedKey] = mappings[key];
-                }
-                return normalizedMappings;
-            };
-
-            /**
-            * @description
-            * keyMappings defines the mapping relationships between keyboard shortcuts and operations for different operating systems.
-            */
-            const keyMappings = {
-                default: normalizeMappings({
-                    'ctrl+z': () => this.undo(app),
-                    'ctrl+y': () => this.redo(app),
-                    'ctrl+shift+z': () => this.redo(app),
-                    // ... other mappings ...
-                }),
-                mac: normalizeMappings({
-                    'meta+z': () => this.undo(app),
-                    'meta+shift+z': () => this.redo(app),
-                    'ctrl+z': () => this.undo(app),
-                    'ctrl+shift+z': () => this.redo(app),
-                    'ctrl+y': () => this.redo(app),
-                    // ... other mappings ...
-                })
-            };
-    
-            const currentKeyMappings = keyMappings[WorkflowHistory.SYSTEM_TYPE];
-
-            this.repKeyCount = 0;
-            window.addEventListener("keydown", function (event) {
-                if(workflowHistory.prevKey === event.key.toLowerCase()) return; //avoid quick auto spamm
-                else if(workflowHistory.prevKey !== null) {
-                    clearTimeout(workflowHistory.keyTimeout);
-                    workflowHistory.repKeyCount=0;
-                }
-                
-                if (app.graph.list_of_graphcanvas[0].getCanvasWindow().document.activeElement.nodeName.toLowerCase() == "textarea")
-                    return; // ignore when editing text
-                if (document.getElementsByClassName("graphdialog").length > 0)
-                    return; // ignore when editing property via dialog
-
-                /**
-                 * @description
-                 * keyCombination records the key combination pressed by the user, so we can detect and match the corresponding operation.
-                 */
-                const keyCombination = [
-                    event.ctrlKey && 'ctrl',
-                    event.metaKey && 'meta',
-                    event.shiftKey && 'shift',
-                    event.altKey && (WorkflowHistory.SYSTEM_TYPE == 'mac' ? 'option' : 'alt'),
-                    event.key.toLowerCase()
-                ].filter(Boolean).join('+');
-
-                // Normalize the captured key combination before comparison
-                const normalizedKeyCombination = normalizeKeyCombination(keyCombination);
-            
-                const operation = currentKeyMappings[normalizedKeyCombination];
-                if (operation) {
-                    operation();
-                    workflowHistory.prevKey = event.key.toLowerCase();
-                    workflowHistory.keyTimeout = setTimeout(
-                        ()=>{workflowHistory.prevKey=null},
-                        workflowHistory.time_to_next_operation_repeat()
-                    );
-                    workflowHistory.repKeyCount += 1;
-                }
-            });
-            
-            window.addEventListener("keyup", function (event) {
-                if (event.key.toLowerCase() === workflowHistory.prevKey ||
-					workflowHistory.prevKey === null){
-                    clearTimeout(workflowHistory.keyTimeout);
-                    workflowHistory.prevKey=null;
-                    workflowHistory.repKeyCount=0;
-                }
-            });
-
-            const o_onBeforeChange = app.graph.onBeforeChange;
-            app.graph.onBeforeChange = function (info) {
-                o_onBeforeChange ? o_onBeforeChange.apply(this, arguments) : undefined;
-
-                this.b_count += 1;
-                if (!workflowHistory.enabled) return;
-                if(this.b_count<2) return;//avoid unnecessary spam
-
-                workflowHistory.before();
-            }
-
-            const o_onAfterChange = app.graph.onAfterChange;
-            app.graph.onAfterChange = function (info) {
-                o_onAfterChange ? o_onAfterChange.apply(this, arguments) : undefined;
-
-                this.b_count -= 1;
-                if (!workflowHistory.enabled) return;
-                if(this.b_count>0) return; //same reasoning as in beforeChange
-
-                workflowHistory.after();
-            }
-        }
     }
 
     before() {
@@ -223,6 +243,7 @@ class WorkflowHistory {
     after() {
         if (!this.enabled) return;
 
+        // TODO remove this later, most likely it is not needed (see TODO list in processMouseDown)
         {
             // was there any change? if not, don't try to store the state
             const equal = this.equal_states(this.get_serialized_graph(app.graph), this.temp_state);
@@ -232,6 +253,7 @@ class WorkflowHistory {
         this.tryAddToUndoHistory();
     }
 
+    // TODO allow to receive new candidate instead of using this.temp_state; use the format {state, timestamp}; add jsdoc
     tryAddToUndoHistory() {
         if (!this.enabled) return;
 
@@ -285,8 +307,9 @@ class WorkflowHistory {
         this.disable_load_reset = false;
     }
 
+    // TODO add arg for light check and add jsdoc
     equal_states(a, b) {
-            return a === b;
+        return a === b;
     }
 
     /**
@@ -295,18 +318,21 @@ class WorkflowHistory {
     * 
     * The igraph is used for serialization.
     */
-    get_serialized_graph(source){
+    get_serialized_graph(source) {
         this.igraph._nodes_by_id = this.igraph._nodes_in_order = null;
         this.igraph._nodes = Object.values(source._nodes_by_id);
         this.igraph.links = source.links;
         this.igraph.last_link_id = source.last_link_id;
         this.igraph.last_node_id = source.last_node_id;
-	this.igraph._groups = source._groups;
+        this.igraph._groups = source._groups;
         // TODO: is there anything else that should be stored?
         // TODO: if applicable, consider removing unneeded data in serialized object; then reintroduced it when loading
         return JSON.stringify(this.igraph.serialize(), null);
     }
 
+    /**
+     * @param {ComfyApp} app 
+     */
     get_new_candidate_state(app) {
         this.temp_timestamp = Date.now();
         this.temp_state = this.get_serialized_graph(app.graph)
@@ -317,15 +343,15 @@ class WorkflowHistory {
         this.redo_history = [];
     }
 
-    time_to_next_operation_repeat(){
+    time_to_next_operation_repeat() {
         const max_delay = 500;
         const min_delay = 30;
         const repeats_till_min_delay = 12;
-        const rtmd_squared = repeats_till_min_delay*repeats_till_min_delay;
+        const rtmd_squared = repeats_till_min_delay * repeats_till_min_delay;
 
-        return max_delay - 
-            (max_delay - min_delay)/rtmd_squared 
-            * Math.min(this.repKeyCount*this.repKeyCount, rtmd_squared);
+        return max_delay -
+            (max_delay - min_delay) / rtmd_squared
+            * Math.min(this.repKeyCount * this.repKeyCount, rtmd_squared);
     }
 
 }

@@ -4,7 +4,7 @@ import { workflowHistory } from "/extensions/ZZZ-Bmad-DirtyUndoRedo/WorkflowHist
 //IMPORTANT, this extension should be the last to be loaded, so make sure the folder is the last alphabetically
 
 app.registerExtension({
-    name: "Comfy.Bmad.DirtyUndoRedo",
+    name: "Comfy.Bmad.DirtyUndoRedoNode",
     async beforeRegisterNodeDef(nodeType, nodeData, app) {
 
         const origGetExtraMenuOptions = nodeType.prototype.getExtraMenuOptions;
@@ -35,20 +35,26 @@ app.registerExtension({
     loadedGraphNode(node, _) {
         if (app.graph._nodes_in_order[0] !== node) return;// execute only once
 
-        workflowHistory.setup(app);
-
         // do not clean undo history if loading was triggered by an undo/redo command
-        if (app.wh.disable_load_reset) 
+        if (workflowHistory.disable_load_reset) 
         {
-            app.wh.disable_load_reset = false;
+            workflowHistory.disable_load_reset = false;
             return;
         }
 
-        app.wh.clean_history(app);
-        app.wh.get_new_candidate_state(app);
+        workflowHistory.clean_history(app);
+        workflowHistory.get_new_candidate_state(app);
     }
 });
 
+
+app.registerExtension({
+    name: "Comfy.Bmad.DirtyUndoRedo",
+    async setup(){
+        workflowHistory._setup(app);
+        app.workflowHistory = workflowHistory;
+    }
+});
 
 //=======================================================================================
 //          Override LiteGraph default behaviors
