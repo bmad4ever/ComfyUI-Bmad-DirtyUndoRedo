@@ -52,21 +52,14 @@ export class WorkflowHistory {
         app.canvas._mouseup_callback = function (event) {
             const r = o__mouseup_callback ? o__mouseup_callback.apply(this, arguments) : undefined;
 
+            // note: right clicks are handled by processMouseDown
+
             if (!workflowHistory.enabled) return r;
             if (!workflowHistory.check_mouse_up) return r;
             workflowHistory.check_mouse_up = false;
 
-            const leftClick = 1;
-            const rightClick = 3;
-
-            if (event.which === leftClick) {
-                workflowHistory.after();
-            }
-
-            if (event.which === rightClick) {
-                workflowHistory.before(); // ??
-            }
-
+            if (event.which === 1 /*left click*/) workflowHistory.after();
+            
             return r;
         };
 
