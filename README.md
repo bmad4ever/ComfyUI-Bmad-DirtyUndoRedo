@@ -5,7 +5,7 @@ IMPORTANT: as of Nov 28, 2023 ComfyUI has the undo/redo functionality, thus maki
 
 After updating your local ComfyUI you will have to remove or disable the extension as it will conflict with the now existing functionality.
 
-**To completely remove the extension you may need to delete the ZZZ-Bmad-DirtyUndoRedo inside the web/extensions directory. (the latest version will delete this folder after starting ComfyUI)**
+**To completely remove the extension you may need to delete the ZZZ-Bmad-DirtyUndoRedo inside the web/extensions directory. (the latest version of this extension will delete this folder after starting ComfyUI)**
 
 __________________________________________________________________
 
