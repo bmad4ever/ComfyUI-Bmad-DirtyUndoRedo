@@ -4,7 +4,13 @@ import { workflowHistory } from "/extensions/ZZZ-Bmad-DirtyUndoRedo/WorkflowHist
 //IMPORTANT, this extension should be the last to be loaded, so make sure the folder is the last alphabetically
 
 app.registerExtension({
-    name: "Comfy.Bmad.DirtyUndoRedoNode",
+    name: "Comfy.Bmad.DirtyUndoRedo",
+    
+    async setup() {
+        workflowHistory._setup(app);
+        app.workflowHistory = workflowHistory;
+    },
+
     async beforeRegisterNodeDef(nodeType, nodeData, app) {
 
         const origGetExtraMenuOptions = nodeType.prototype.getExtraMenuOptions;
@@ -47,14 +53,6 @@ app.registerExtension({
     }
 });
 
-
-app.registerExtension({
-    name: "Comfy.Bmad.DirtyUndoRedo",
-    async setup(){
-        workflowHistory._setup(app);
-        app.workflowHistory = workflowHistory;
-    }
-});
 
 //=======================================================================================
 //          Override LiteGraph default behaviors
