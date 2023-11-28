@@ -239,23 +239,14 @@ export class WorkflowHistory {
             }
 
         // potential state outside merge thresh. note that it is not guaranteed to be pushed        
-        //this.get_new_candidate_state(app);
-        const p_candidate_state = { state: workflowHistory.temp_state, timestamp: workflowHistory.temp_timestamp }
-        workflowHistory.get_new_candidate_state(app);
-        if (!workflowHistory.equal_states(p_candidate_state.state, workflowHistory.temp_state, true))
-            workflowHistory.tryAddToUndoHistory(p_candidate_state);
+        const p_candidate_state = { state: this.temp_state, timestamp: this.temp_timestamp }
+        this.get_new_candidate_state(app);
+        if (!this.equal_states(p_candidate_state.state, this.temp_state, true))
+            this.tryAddToUndoHistory(p_candidate_state);
     }
 
     after() {
         if (!this.enabled) return;
-
-        // TODO remove this later, most likely it is not needed (see TODO list in processMouseDown)
-        /* {
-             // was there any change? if not, don't try to store the state
-             const equal = this.equal_states(this.get_serialized_graph(app.graph), this.temp_state);
-             if (equal) return;
-         }*/
-
         this.tryAddToUndoHistory();
     }
 
